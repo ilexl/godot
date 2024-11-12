@@ -380,7 +380,7 @@ void ResourceImporterTexture::_save_ctex(const Ref<Image> &p_image, const String
 	f->store_32(0);
 	f->store_32(0);
 
-	if ((p_compress_mode == COMPRESS_LOSSLESS || p_compress_mode == COMPRESS_LOSSY) && p_image->get_format() >= Image::FORMAT_RF) {
+	if ((p_compress_mode == COMPRESS_LOSSLESS || p_compress_mode == COMPRESS_LOSSY) && p_image->get_format() > Image::FORMAT_RGBA8) {
 		p_compress_mode = COMPRESS_VRAM_UNCOMPRESSED; //these can't go as lossy
 	}
 
@@ -428,7 +428,7 @@ Dictionary ResourceImporterTexture::_load_editor_meta(const String &p_path) cons
 	return f->get_var();
 }
 
-Error ResourceImporterTexture::import(ResourceUID::ID p_source_id, const String &p_source_file, const String &p_save_path, const HashMap<StringName, Variant> &p_options, List<String> *r_platform_variants, List<String> *r_gen_files, Variant *r_metadata) {
+Error ResourceImporterTexture::import(const String &p_source_file, const String &p_save_path, const HashMap<StringName, Variant> &p_options, List<String> *r_platform_variants, List<String> *r_gen_files, Variant *r_metadata) {
 	// Parse import options.
 	int32_t loader_flags = ImageFormatLoader::FLAG_NONE;
 
@@ -593,6 +593,11 @@ Error ResourceImporterTexture::import(ResourceUID::ID p_source_id, const String 
 		}
 	}
 
+	if (compress_mode == COMPRESS_BASIS_UNIVERSAL && image->get_format() >= Image::FORMAT_RF) {
+		// Basis universal does not support float formats, fallback.
+		compress_mode = COMPRESS_VRAM_COMPRESSED;
+	}
+
 	bool detect_3d = int(p_options["detect_3d/compress_to"]) > 0;
 	bool detect_roughness = roughness == 0;
 	bool detect_normal = normal == 0;
@@ -735,8 +740,10 @@ String ResourceImporterTexture::get_import_settings_string() const {
 	return s;
 }
 
-bool ResourceImporterTexture::are_import_settings_valid(const String &p_path, const Dictionary &p_meta) const {
-	if (p_meta.has("has_editor_variant")) {
+bool ResourceImporterTexture::are_import_settings_valid(const String &p_path) const {
+	Dictionary meta = ResourceFormatImporter::get_singleton()->get_resource_metadata(p_path);
+
+	if (meta.has("has_editor_variant")) {
 		String imported_path = ResourceFormatImporter::get_singleton()->get_internal_resource_path(p_path);
 		if (!FileAccess::exists(imported_path)) {
 			return false;
@@ -753,19 +760,19 @@ bool ResourceImporterTexture::are_import_settings_valid(const String &p_path, co
 		}
 	}
 
-	if (!p_meta.has("vram_texture")) {
+	if (!meta.has("vram_texture")) {
 		return false;
 	}
 
-	bool vram = p_meta["vram_texture"];
+	bool vram = meta["vram_texture"];
 	if (!vram) {
 		return true; // Do not care about non-VRAM.
 	}
 
 	// Will become invalid if formats are missing to import.
 	Vector<String> formats_imported;
-	if (p_meta.has("imported_formats")) {
-		formats_imported = p_meta["imported_formats"];
+	if (meta.has("imported_formats")) {
+		formats_imported = meta["imported_formats"];
 	}
 
 	int index = 0;

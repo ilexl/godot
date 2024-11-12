@@ -46,8 +46,8 @@
 void NavigationObstacle3DEditor::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_READY: {
-			button_create->set_button_icon(get_editor_theme_icon(SNAME("Edit")));
-			button_edit->set_button_icon(get_editor_theme_icon(SNAME("MovePoint")));
+			button_create->set_icon(get_editor_theme_icon(SNAME("Edit")));
+			button_edit->set_icon(get_editor_theme_icon(SNAME("MovePoint")));
 			button_edit->set_pressed(true);
 			get_tree()->connect("node_removed", callable_mp(this, &NavigationObstacle3DEditor::_node_removed));
 
@@ -115,14 +115,9 @@ EditorPlugin::AfterGUIInput NavigationObstacle3DEditor::forward_3d_gui_input(Cam
 		return EditorPlugin::AFTER_GUI_INPUT_PASS;
 	}
 
-	// Use special transformation rules for NavigationObstacle3D: Only take global y-rotation into account and limit scaling to positive values.
-	Transform3D gt;
-	gt.origin = obstacle_node->get_global_position();
-	gt.scale_basis(obstacle_node->get_global_basis().get_scale().abs().maxf(0.001));
-	gt.rotate_basis(Vector3(0.0, 1.0, 0.0), obstacle_node->get_global_rotation().y);
+	Transform3D gt = obstacle_node->get_global_transform();
 	Transform3D gi = gt.affine_inverse();
 	Plane p(Vector3(0.0, 1.0, 0.0), gt.origin);
-	point_lines_meshinstance->set_transform(gt.translated(Vector3(0.0, 0.0, 0.00001)));
 
 	Ref<InputEventMouseButton> mb = p_event;
 
@@ -379,12 +374,9 @@ void NavigationObstacle3DEditor::_polygon_draw() {
 	point_handle_mesh->clear_surfaces();
 	point_lines_mesh->clear_surfaces();
 	point_lines_meshinstance->set_material_override(line_material);
-
-	if (poly.is_empty()) {
-		return;
-	}
-
 	point_lines_mesh->surface_begin(Mesh::PRIMITIVE_LINES);
+
+	Rect2 rect;
 
 	for (int i = 0; i < poly.size(); i++) {
 		Vector2 p, p2;
@@ -400,6 +392,12 @@ void NavigationObstacle3DEditor::_polygon_draw() {
 			p2 = poly[(i + 1) % poly.size()];
 		}
 
+		if (i == 0) {
+			rect.position = p;
+		} else {
+			rect.expand_to(p);
+		}
+
 		Vector3 point = Vector3(p.x, 0.0, p.y);
 		Vector3 next_point = Vector3(p2.x, 0.0, p2.y);
 
@@ -413,7 +411,57 @@ void NavigationObstacle3DEditor::_polygon_draw() {
 		//vpc->draw_texture(handle,point-handle->get_size()*0.5);
 	}
 
+	rect = rect.grow(1);
+
+	AABB r;
+	r.position.x = rect.position.x;
+	r.position.y = 0.0;
+	r.position.z = rect.position.y;
+	r.size.x = rect.size.x;
+	r.size.y = 0;
+	r.size.z = rect.size.y;
+
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position);
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(0.3, 0, 0));
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position);
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(0.0, 0.3, 0));
+
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(r.size.x, 0, 0));
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(r.size.x, 0, 0) - Vector3(0.3, 0, 0));
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(r.size.x, 0, 0));
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(r.size.x, 0, 0) + Vector3(0, 0.3, 0));
+
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(0, r.size.y, 0));
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(0, r.size.y, 0) - Vector3(0, 0.3, 0));
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(0, r.size.y, 0));
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + Vector3(0, r.size.y, 0) + Vector3(0.3, 0, 0));
+
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + r.size);
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + r.size - Vector3(0.3, 0, 0));
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + r.size);
+	point_lines_mesh->surface_set_color(Color(0.8, 0.8, 0.8, 0.2));
+	point_lines_mesh->surface_add_vertex(r.position + r.size - Vector3(0.0, 0.3, 0));
+
 	point_lines_mesh->surface_end();
+
+	if (poly.size() == 0) {
+		return;
+	}
 
 	Array point_handle_mesh_array;
 	point_handle_mesh_array.resize(Mesh::ARRAY_MAX);
@@ -493,9 +541,8 @@ NavigationObstacle3DEditor::NavigationObstacle3DEditor() {
 	point_lines_mesh.instantiate();
 	point_lines_meshinstance->set_mesh(point_lines_mesh);
 	point_lines_meshinstance->set_transform(Transform3D(Basis(), Vector3(0, 0, 0.00001)));
-	point_lines_meshinstance->set_as_top_level(true);
 
-	line_material.instantiate();
+	line_material = Ref<StandardMaterial3D>(memnew(StandardMaterial3D));
 	line_material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 	line_material->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
 	line_material->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
@@ -503,7 +550,7 @@ NavigationObstacle3DEditor::NavigationObstacle3DEditor() {
 	line_material->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 	line_material->set_albedo(Color(1, 1, 1));
 
-	handle_material.instantiate();
+	handle_material = Ref<StandardMaterial3D>(memnew(StandardMaterial3D));
 	handle_material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 	handle_material->set_flag(StandardMaterial3D::FLAG_USE_POINT_SIZE, true);
 	handle_material->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
